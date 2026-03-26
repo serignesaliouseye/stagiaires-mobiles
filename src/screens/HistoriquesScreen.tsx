@@ -8,13 +8,11 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Modal,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import api from '../services/api';
-import { getUser } from '../utils/storage';
 
 interface Pointage {
   id: number;
@@ -46,18 +44,45 @@ const HistoriqueScreen: React.FC = () => {
         params: { limit: 50 }
       });
       
-      // Adapter selon le format de réponse
-      const data = response.data?.data || response.data || [];
-      setPointages(data);
+      console.log('Réponse API historique:', response.data);
       
-      // Calculer les stats
-      const newStats = {
-        total: data.length,
-        present: data.filter((p: Pointage) => p.statut === 'present').length,
-        retard: data.filter((p: Pointage) => p.statut === 'retard').length,
-        absent: data.filter((p: Pointage) => p.statut === 'absent').length,
-      };
-      setStats(newStats);
+      // ✅ CORRECTION: Extraire le tableau des pointages du format paginé
+      let pointagesData: Pointage[] = [];
+      
+      // Format attendu: { data: { data: [...] } }
+      if (response.data?.data?.data && Array.isArray(response.data.data.data)) {
+        pointagesData = response.data.data.data;
+      }
+      // Fallback: { data: [...] }
+      else if (response.data?.data && Array.isArray(response.data.data)) {
+        pointagesData = response.data.data;
+      }
+      // Fallback: tableau direct
+      else if (Array.isArray(response.data)) {
+        pointagesData = response.data;
+      }
+      
+      console.log('Pointages chargés:', pointagesData.length);
+      setPointages(pointagesData);
+      
+      // ✅ Utiliser les stats déjà calculées par le backend
+      if (response.data?.stats) {
+        setStats({
+          total: response.data.stats.total || pointagesData.length,
+          present: response.data.stats.present || 0,
+          retard: response.data.stats.retard || 0,
+          absent: response.data.stats.absent || 0,
+        });
+      } else {
+        // Calcul local de secours
+        const newStats = {
+          total: pointagesData.length,
+          present: pointagesData.filter((p: Pointage) => p.statut === 'present').length,
+          retard: pointagesData.filter((p: Pointage) => p.statut === 'retard').length,
+          absent: pointagesData.filter((p: Pointage) => p.statut === 'absent').length,
+        };
+        setStats(newStats);
+      }
     } catch (error) {
       console.error('Erreur chargement historique:', error);
     } finally {
@@ -78,6 +103,7 @@ const HistoriqueScreen: React.FC = () => {
   };
 
   const getFilteredPointages = () => {
+    if (!pointages || !Array.isArray(pointages)) return [];
     if (filter === 'tous') return pointages;
     return pointages.filter(p => p.statut === filter);
   };
@@ -113,13 +139,16 @@ const HistoriqueScreen: React.FC = () => {
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('fr-FR', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric'
-    });
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('fr-FR', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+    } catch (error) {
+      return dateString;
+    }
   };
 
   const formatTime = (timeString: string | null) => {

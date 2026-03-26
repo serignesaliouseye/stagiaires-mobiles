@@ -8,7 +8,7 @@ import DashboardScreen from '../components/dashboard/DashboardScreen';
 import ScanScreen from '../screens/scanScreen';
 import HistoriqueScreen from '../screens/HistoriquesScreen';
 import SanctionsScreen from '../screens/SanctionsScreen';
-import NotificationsScreen from '../screens/HistoriquesScreen';
+import NotificationsScreen from '../screens/NotificationsScreen';
 import SaisieManuelleScreen from '../screens/SaisieManuelleScreen';
 
 const Tab = createBottomTabNavigator();

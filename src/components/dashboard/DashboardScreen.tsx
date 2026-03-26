@@ -6,19 +6,23 @@ import {
   RefreshControl,
   ActivityIndicator,
   StyleSheet,
+  TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import api from '../../api/client';
 import { Stats, Pointage } from '../../types';
-import { getUser } from '../../utils/storage';
+import { getUser, clearStorage } from '../../utils/storage';
 
-const DashboardScreen: React.FC = () => {
+const DashboardScreen: React.FC = ({ navigation }: any) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState<Stats | null>(null);
   const [lastPointage, setLastPointage] = useState<Pointage | null>(null);
   const [user, setUser] = useState<any>(null);
+  const [todayStatus, setTodayStatus] = useState<string | null>(null);
 
   const loadData = async () => {
     try {
@@ -28,15 +32,67 @@ const DashboardScreen: React.FC = () => {
         getUser(),
       ]);
 
+      console.log('Stats reçues:', statsRes.data);
+      console.log('Pointages reçus:', pointagesRes.data);
+
       setStats(statsRes.data);
-      setLastPointage(pointagesRes.data.data[0] || null);
+
+      let lastPoint = null;
+      
+      if (pointagesRes.data?.data?.data && Array.isArray(pointagesRes.data.data.data)) {
+        lastPoint = pointagesRes.data.data.data[0] || null;
+      }
+      else if (pointagesRes.data?.data && Array.isArray(pointagesRes.data.data)) {
+        lastPoint = pointagesRes.data.data[0] || null;
+      }
+      else if (Array.isArray(pointagesRes.data)) {
+        lastPoint = pointagesRes.data[0] || null;
+      }
+      
+      console.log('Dernier pointage extrait:', lastPoint);
+      setLastPointage(lastPoint);
       setUser(userData);
+
+      if (lastPoint && new Date(lastPoint.date).toDateString() === new Date().toDateString()) {
+        setTodayStatus(lastPoint.statut);
+      } else {
+        setTodayStatus(null);
+      }
     } catch (error) {
       console.error('Erreur chargement données:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
+  };
+
+  const handleLogout = async () => {
+    Alert.alert(
+      'Déconnexion',
+      'Êtes-vous sûr de vouloir vous déconnecter ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Se déconnecter',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Appel API pour invalider le token
+              await api.post('/logout');
+              // Effacer le stockage local
+              await clearStorage();
+              // Rediriger vers l'écran de connexion
+              navigation.navigate('Login');
+            } catch (error) {
+              console.error('Erreur déconnexion:', error);
+              // Même en cas d'erreur, on efface le stockage
+              await clearStorage();
+              navigation.navigate('Login');
+            }
+          },
+        },
+      ]
+    );
   };
 
   useFocusEffect(
@@ -60,10 +116,26 @@ const DashboardScreen: React.FC = () => {
     }
   };
 
+  const getStatusLabel = (statut: string) => {
+    switch (statut) {
+      case 'present': return 'Présent';
+      case 'retard': return 'Retard';
+      case 'absent': return 'Absent';
+      case 'justifie': return 'Justifié';
+      default: return statut;
+    }
+  };
+
+  const formatTime = (timeString: string | null | undefined) => {
+    if (!timeString) return '--:--';
+    return timeString.substring(0, 5);
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#4f46e5" />
+        <Text style={styles.loadingText}>Chargement de votre tableau de bord...</Text>
       </View>
     );
   }
@@ -76,13 +148,30 @@ const DashboardScreen: React.FC = () => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* En-tête */}
+        {/* En-tête avec icône de déconnexion */}
         <View style={styles.header}>
-          <Text style={styles.greeting}>
-            Bonjour, {user?.prenom} 👋
-          </Text>
-          <Text style={styles.promotion}>{user?.promotion}</Text>
+          <View style={styles.headerLeft}>
+            <Text style={styles.greeting}>
+              Bonjour, {user?.prenom || 'Stagiaire'} 👋
+            </Text>
+            <Text style={styles.promotion}>{user?.promotion || ''}</Text>
+          </View>
+          <TouchableOpacity 
+            onPress={handleLogout}
+            style={styles.logoutButton}
+          >
+            <Ionicons name="log-out-outline" size={24} color="#EF4444" />
+          </TouchableOpacity>
         </View>
+
+        {/* Statut du jour */}
+        {todayStatus && (
+          <View style={[styles.statusCard, { backgroundColor: getStatusStyle(todayStatus).bg }]}>
+            <Text style={[styles.statusText, { color: getStatusStyle(todayStatus).text }]}>
+              Statut aujourd'hui: {getStatusLabel(todayStatus)}
+            </Text>
+          </View>
+        )}
 
         {/* Dernier pointage */}
         <View style={styles.card}>
@@ -98,13 +187,13 @@ const DashboardScreen: React.FC = () => {
               <View style={styles.row}>
                 <Text style={styles.rowLabel}>Arrivée:</Text>
                 <Text style={styles.rowValue}>
-                  {lastPointage.heure_arrivee || 'Non pointé'}
+                  {formatTime(lastPointage.heure_arrivee)}
                 </Text>
               </View>
               <View style={styles.row}>
                 <Text style={styles.rowLabel}>Départ:</Text>
                 <Text style={styles.rowValue}>
-                  {lastPointage.heure_sortie || 'Non pointé'}
+                  {formatTime(lastPointage.heure_sortie)}
                 </Text>
               </View>
               <View style={styles.row}>
@@ -117,14 +206,14 @@ const DashboardScreen: React.FC = () => {
                     styles.badgeText,
                     { color: getStatusStyle(lastPointage.statut).text }
                   ]}>
-                    {lastPointage.statut.toUpperCase()}
+                    {getStatusLabel(lastPointage.statut)}
                   </Text>
                 </View>
               </View>
             </View>
           ) : (
             <Text style={styles.emptyText}>
-              Aucun pointage aujourd'hui
+              Aucun pointage enregistré
             </Text>
           )}
         </View>
@@ -165,7 +254,7 @@ const DashboardScreen: React.FC = () => {
         {/* Info scanner */}
         <View style={styles.scanInfo}>
           <Text style={styles.scanText}>
-            Scannez le QR code pour pointer
+            📱 Scannez le QR code pour pointer votre présence
           </Text>
         </View>
       </ScrollView>
@@ -180,6 +269,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#F9FAFB',
   },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6B7280',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F3F4F6',
@@ -189,8 +283,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 24,
     marginTop: 8,
+  },
+  headerLeft: {
+    flex: 1,
   },
   greeting: {
     fontSize: 24,
@@ -201,6 +301,21 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 4,
     fontSize: 14,
+  },
+  logoutButton: {
+    padding: 8,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 30,
+  },
+  statusCard: {
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  statusText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   card: {
     backgroundColor: '#ffffff',
@@ -280,6 +395,7 @@ const styles = StyleSheet.create({
   scanInfo: {
     alignItems: 'center',
     marginBottom: 32,
+    marginTop: 8,
   },
   scanText: {
     color: '#6B7280',
