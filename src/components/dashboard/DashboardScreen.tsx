@@ -6,17 +6,15 @@ import {
   RefreshControl,
   ActivityIndicator,
   StyleSheet,
-  TouchableOpacity,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import Navbar from '../Navbar';
 import api from '../../api/client';
 import { Stats, Pointage } from '../../types';
-import { getUser, clearStorage } from '../../utils/storage';
+import { getUser } from '../../utils/storage';
 
-const DashboardScreen: React.FC = ({ navigation }: any) => {
+const DashboardScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -32,9 +30,6 @@ const DashboardScreen: React.FC = ({ navigation }: any) => {
         getUser(),
       ]);
 
-      console.log('Stats reçues:', statsRes.data);
-      console.log('Pointages reçus:', pointagesRes.data);
-
       setStats(statsRes.data);
 
       let lastPoint = null;
@@ -49,7 +44,6 @@ const DashboardScreen: React.FC = ({ navigation }: any) => {
         lastPoint = pointagesRes.data[0] || null;
       }
       
-      console.log('Dernier pointage extrait:', lastPoint);
       setLastPointage(lastPoint);
       setUser(userData);
 
@@ -64,35 +58,6 @@ const DashboardScreen: React.FC = ({ navigation }: any) => {
       setLoading(false);
       setRefreshing(false);
     }
-  };
-
-  const handleLogout = async () => {
-    Alert.alert(
-      'Déconnexion',
-      'Êtes-vous sûr de vouloir vous déconnecter ?',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Se déconnecter',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              // Appel API pour invalider le token
-              await api.post('/logout');
-              // Effacer le stockage local
-              await clearStorage();
-              // Rediriger vers l'écran de connexion
-              navigation.navigate('Login');
-            } catch (error) {
-              console.error('Erreur déconnexion:', error);
-              // Même en cas d'erreur, on efface le stockage
-              await clearStorage();
-              navigation.navigate('Login');
-            }
-          },
-        },
-      ]
-    );
   };
 
   useFocusEffect(
@@ -126,9 +91,29 @@ const DashboardScreen: React.FC = ({ navigation }: any) => {
     }
   };
 
+  // ✅ CORRECTION: Fonction formatTime qui gère les différents formats
   const formatTime = (timeString: string | null | undefined) => {
     if (!timeString) return '--:--';
-    return timeString.substring(0, 5);
+    
+    // Si c'est un datetime complet (ex: "2026-03-26T13:52:58.000000Z")
+    if (timeString.includes('T')) {
+      try {
+        const date = new Date(timeString);
+        return date.toLocaleTimeString('fr-FR', {
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      } catch (e) {
+        return timeString.substring(0, 5);
+      }
+    }
+    
+    // Si c'est déjà au format HH:MM:SS
+    if (timeString.length >= 5) {
+      return timeString.substring(0, 5);
+    }
+    
+    return timeString;
   };
 
   if (loading) {
@@ -142,26 +127,21 @@ const DashboardScreen: React.FC = ({ navigation }: any) => {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Barre de navigation professionnelle */}
+      <Navbar title="Dashboard" />
+
       <ScrollView
         style={styles.scrollView}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* En-tête avec icône de déconnexion */}
+        {/* En-tête de bienvenue */}
         <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.greeting}>
-              Bonjour, {user?.prenom || 'Stagiaire'} 👋
-            </Text>
-            <Text style={styles.promotion}>{user?.promotion || ''}</Text>
-          </View>
-          <TouchableOpacity 
-            onPress={handleLogout}
-            style={styles.logoutButton}
-          >
-            <Ionicons name="log-out-outline" size={24} color="#EF4444" />
-          </TouchableOpacity>
+          <Text style={styles.greeting}>
+            Bonjour, {user?.prenom || 'Stagiaire'} {user?.nom || ''}!
+          </Text>
+          <Text style={styles.promotion}>{user?.promotion || ''}</Text>
         </View>
 
         {/* Statut du jour */}
@@ -181,7 +161,11 @@ const DashboardScreen: React.FC = ({ navigation }: any) => {
               <View style={styles.row}>
                 <Text style={styles.rowLabel}>Date:</Text>
                 <Text style={styles.rowValue}>
-                  {new Date(lastPointage.date).toLocaleDateString('fr-FR')}
+                  {new Date(lastPointage.date).toLocaleDateString('fr-FR', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
+                  })}
                 </Text>
               </View>
               <View style={styles.row}>
@@ -283,14 +267,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: 24,
-    marginTop: 8,
-  },
-  headerLeft: {
-    flex: 1,
+    marginTop: 16,
   },
   greeting: {
     fontSize: 24,
@@ -301,11 +279,6 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 4,
     fontSize: 14,
-  },
-  logoutButton: {
-    padding: 8,
-    backgroundColor: '#FEF2F2',
-    borderRadius: 30,
   },
   statusCard: {
     borderRadius: 12,

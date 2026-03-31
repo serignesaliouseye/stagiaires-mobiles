@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,9 +13,10 @@ import { CameraView, useCameraPermissions, CameraType } from 'expo-camera';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import api from '../services/api'; // ✅ Corrigé le chemin
+import * as Haptics from 'expo-haptics';
+import api from '../services/api';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 const ScanScreen: React.FC = () => {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
@@ -24,25 +25,36 @@ const ScanScreen: React.FC = () => {
   const [torch, setTorch] = useState(false);
   const [facing, setFacing] = useState<CameraType>('back');
   const navigation = useNavigation();
+  const scanTimeout = useRef<NodeJS.Timeout | null>(null);
+  const isProcessing = useRef(false);
 
   const [permission, requestPermission] = useCameraPermissions();
 
-  React.useEffect(() => {
+  useEffect(() => {
     (async () => {
       const { status } = await requestPermission();
       setHasPermission(status === 'granted');
     })();
+    
+    return () => {
+      if (scanTimeout.current) {
+        clearTimeout(scanTimeout.current);
+      }
+    };
   }, []);
 
   const handleBarCodeScanned = async ({ data }: { data: string }) => {
-    if (scanned || loading) return;
-
+    // ✅ Empêcher les scans multiples
+    if (scanned || loading || isProcessing.current) return;
+    
+    isProcessing.current = true;
     setScanned(true);
-    // ✅ Supprimé expo-haptics, utilise Vibration native
-    Vibration.vibrate(200);
+    Vibration.vibrate();
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setLoading(true);
 
     try {
+      // Extraire le token du QR code
       let token = data;
       try {
         const parsed = JSON.parse(data);
@@ -51,6 +63,9 @@ const ScanScreen: React.FC = () => {
         // Si ce n'est pas du JSON, on utilise la donnée brute
       }
 
+      console.log('📱 Token scanné:', token);
+
+      // Appel API pour valider le scan
       const response = await api.post('/pointages/scanner', {
         qr_token: token
       });
@@ -67,14 +82,17 @@ const ScanScreen: React.FC = () => {
             onPress: () => {
               setScanned(false);
               setLoading(false);
+              isProcessing.current = false;
               navigation.goBack();
             }
           }
         ]
       );
     } catch (error: any) {
+      console.error('❌ Erreur scan:', error.response?.data || error);
+      
       const errorMessage = error.response?.data?.message || 'QR code invalide ou expiré';
-
+      
       Alert.alert(
         '❌ Erreur',
         errorMessage,
@@ -84,6 +102,7 @@ const ScanScreen: React.FC = () => {
             onPress: () => {
               setScanned(false);
               setLoading(false);
+              isProcessing.current = false;
             }
           },
           {
@@ -91,12 +110,27 @@ const ScanScreen: React.FC = () => {
             onPress: () => {
               setScanned(false);
               setLoading(false);
+              isProcessing.current = false;
               navigation.navigate('SaisieManuelle' as never);
             }
           }
         ]
       );
+    } finally {
+      setLoading(false);
+      // Réinitialiser isProcessing après un délai
+      scanTimeout.current = setTimeout(() => {
+        isProcessing.current = false;
+      }, 2000);
     }
+  };
+
+  const toggleTorch = () => {
+    setTorch(!torch);
+  };
+
+  const flipCamera = () => {
+    setFacing(facing === 'back' ? 'front' : 'back');
   };
 
   if (hasPermission === null) {
@@ -111,7 +145,7 @@ const ScanScreen: React.FC = () => {
   if (hasPermission === false) {
     return (
       <View style={styles.centerContainer}>
-        <Ionicons name="ban" size={64} color="#ef4444" />
+        <Ionicons name="camera-off" size={64} color="#ef4444" />
         <Text style={styles.permissionText}>Pas d'accès à la caméra</Text>
         <Text style={styles.permissionSubText}>
           Pour scanner les QR codes, vous devez autoriser l'accès à la caméra
@@ -134,11 +168,10 @@ const ScanScreen: React.FC = () => {
         enableTorch={torch}
         onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
         barcodeScannerSettings={{
-          barcodeTypes: ['qr'],
+          barcodeTypes: ['qr', 'code128', 'code39', 'ean13', 'ean8'],
         }}
       >
         <View style={styles.overlay}>
-          {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity
               style={styles.headerButton}
@@ -149,17 +182,16 @@ const ScanScreen: React.FC = () => {
             <Text style={styles.headerTitle}>Scanner QR Code</Text>
             <TouchableOpacity
               style={styles.headerButton}
-              onPress={() => setTorch(!torch)}
+              onPress={toggleTorch}
             >
-              <Ionicons
-                name={torch ? 'flash' : 'flash-off'}
-                size={24}
-                color="white"
+              <Ionicons 
+                name={torch ? "flash" : "flash-off"} 
+                size={24} 
+                color="white" 
               />
             </TouchableOpacity>
           </View>
 
-          {/* Zone de scan */}
           <View style={styles.scanArea}>
             <View style={styles.scanFrame}>
               <View style={[styles.corner, styles.cornerTL]} />
@@ -169,7 +201,6 @@ const ScanScreen: React.FC = () => {
             </View>
           </View>
 
-          {/* Instructions */}
           <View style={styles.instructions}>
             <Text style={styles.instructionText}>
               Placez le QR code dans le cadre
@@ -179,11 +210,10 @@ const ScanScreen: React.FC = () => {
             </Text>
           </View>
 
-          {/* Footer */}
           <View style={styles.footer}>
             <TouchableOpacity
               style={styles.flipButton}
-              onPress={() => setFacing(facing === 'back' ? 'front' : 'back')}
+              onPress={flipCamera}
             >
               <Ionicons name="camera-reverse" size={24} color="white" />
               <Text style={styles.flipButtonText}>Retourner</Text>
@@ -198,11 +228,13 @@ const ScanScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
 
-          {/* Bouton re-scanner */}
           {scanned && !loading && (
             <TouchableOpacity
               style={styles.scanAgainButton}
-              onPress={() => setScanned(false)}
+              onPress={() => {
+                setScanned(false);
+                isProcessing.current = false;
+              }}
             >
               <Ionicons name="refresh" size={20} color="white" />
               <Text style={styles.scanAgainText}>Scanner à nouveau</Text>
@@ -211,7 +243,6 @@ const ScanScreen: React.FC = () => {
         </View>
       </CameraView>
 
-      {/* Overlay chargement */}
       {loading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color="#4f46e5" />
@@ -365,6 +396,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     borderRadius: 30,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
     elevation: 5,
   },
   scanAgainText: {

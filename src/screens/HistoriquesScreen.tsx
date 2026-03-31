@@ -46,7 +46,6 @@ const HistoriqueScreen: React.FC = () => {
       
       console.log('Réponse API historique:', response.data);
       
-      // ✅ CORRECTION: Extraire le tableau des pointages du format paginé
       let pointagesData: Pointage[] = [];
       
       // Format attendu: { data: { data: [...] } }
@@ -65,7 +64,7 @@ const HistoriqueScreen: React.FC = () => {
       console.log('Pointages chargés:', pointagesData.length);
       setPointages(pointagesData);
       
-      // ✅ Utiliser les stats déjà calculées par le backend
+      // Utiliser les stats déjà calculées par le backend
       if (response.data?.stats) {
         setStats({
           total: response.data.stats.total || pointagesData.length,
@@ -74,7 +73,6 @@ const HistoriqueScreen: React.FC = () => {
           absent: response.data.stats.absent || 0,
         });
       } else {
-        // Calcul local de secours
         const newStats = {
           total: pointagesData.length,
           present: pointagesData.filter((p: Pointage) => p.statut === 'present').length,
@@ -151,9 +149,29 @@ const HistoriqueScreen: React.FC = () => {
     }
   };
 
-  const formatTime = (timeString: string | null) => {
+  // ✅ CORRECTION: Fonction formatTime qui gère les différents formats
+  const formatTime = (timeString: string | null | undefined) => {
     if (!timeString) return '--:--';
-    return timeString.substring(0, 5);
+    
+    // Si c'est un datetime complet (ex: "2026-03-26T13:52:58.000000Z")
+    if (timeString.includes('T')) {
+      try {
+        const date = new Date(timeString);
+        return date.toLocaleTimeString('fr-FR', {
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      } catch (e) {
+        return timeString.substring(0, 5);
+      }
+    }
+    
+    // Si c'est déjà au format HH:MM:SS
+    if (timeString.length >= 5) {
+      return timeString.substring(0, 5);
+    }
+    
+    return timeString;
   };
 
   if (loading) {

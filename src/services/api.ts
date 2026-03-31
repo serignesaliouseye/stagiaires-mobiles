@@ -2,7 +2,7 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
 // 👇 METTEZ VOTRE IP ICI
-const IP_ORDINATEUR = '192.168.1.6'; // Remplacez par votre IP
+const IP_ORDINATEUR = '192.168.1.12'; // Remplacez par votre IP
 const API_URL = `http://${IP_ORDINATEUR}:8000/api`;
 
 console.log('🌐 API_URL utilisée:', API_URL);
