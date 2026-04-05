@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Pointage Stagiaire",
-    "slug": "pointage-stagiaire",
+    "slug": "stagiaires-mobiles",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -16,10 +16,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.pointage.stagiaire",
-      "infoPlist": {
-        "NSCameraUsageDescription": "Cette application utilise la caméra pour scanner les QR codes de pointage."
-      }
+      "bundleIdentifier": "com.pointage.stagiaire"
     },
     "android": {
       "adaptiveIcon": {
