@@ -1,29 +1,54 @@
 {
   "expo": {
-    "name": "stagiaires-mobiles",
-    "slug": "stagiaires-mobiles",
+    "name": "Pointage Stagiaire",
+    "slug": "pointage-stagiaire",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#4f46e5"
     },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.pointage.stagiaire",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Cette application utilise la caméra pour scanner les QR codes de pointage."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-icon-background.png",
         "backgroundColor": "#4f46e5"
-      }
+      },
+      "package": "com.pointage.stagiaire",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "vite"
     },
     "plugins": [
-      "expo-secure-store"
-    ]
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "L'application a besoin d'accéder à la caméra pour scanner les QR codes."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "063d4876-1fae-4a20-93be-d227a44931e9"
+      }
+    }
   }
 }
