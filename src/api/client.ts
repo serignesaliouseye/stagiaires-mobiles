@@ -1,9 +1,8 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
-// 👇 METTEZ VOTRE IP ICI
-const IP_ORDINATEUR = '192.168.1.12'; // Remplacez par votre IP
-const API_URL = `http://${IP_ORDINATEUR}:8000/api`;
+// ✅ Utilisez l'URL de votre backend déployé sur Render
+const API_URL = process.env.API_URL || 'https://backend-pointage-cwb8.onrender.com/api';
 
 console.log('🌐 API_URL utilisée:', API_URL);
 
@@ -13,7 +12,7 @@ const api = axios.create({
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
-  timeout: 15000,
+  timeout: 30000, // Augmenté pour Render (service gratuit parfois lent au réveil)
 });
 
 // Intercepteur pour ajouter le token
@@ -42,16 +41,18 @@ api.interceptors.response.use(
     console.log('✅ Réponse:', response.status, response.config.url);
     return response;
   },
-  async (error) => {  // ← AJOUTER "async" ICI
+  async (error) => {
     if (error.code === 'ECONNREFUSED') {
       console.error('💥 Connexion refusée. Vérifiez que:');
-      console.error('   1. Le backend est lancé: php artisan serve --host=0.0.0.0');
-      console.error(`   2. L'IP est correcte: ${API_URL}`);
-      console.error('   3. Le pare-feu autorise PHP');
-      console.error('   4. Le téléphone et l\'ordinateur sont sur le même réseau WiFi');
+      console.error(`   1. Le backend est accessible: ${API_URL}`);
+      console.error('   2. Le backend n\'est pas en veille sur Render');
+    } else if (error.code === 'ERR_NETWORK') {
+      console.error('🌍 Erreur réseau. Vérifiez votre connexion internet.');
     } else if (error.response?.status === 401) {
       console.log('🔐 Token expiré, déconnexion...');
       await SecureStore.deleteItemAsync('token');
+    } else if (error.response?.status === 503) {
+      console.log('⏳ Service en cours de réveil (Render gratuit). Réessayez dans quelques secondes.');
     }
     return Promise.reject(error);
   }
